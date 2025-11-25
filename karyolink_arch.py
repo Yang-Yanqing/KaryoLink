@@ -21,6 +21,7 @@ digraph KaryoLink {
     fontsize=10;
     node [shape=rect, style="rounded,filled", fontname="Helvetica"];
 
+    // ---------- Nodos ----------
     tecnico      [label="Técnico\n(Usuario)", fillcolor="#BBDEFB"];
     frontend     [label="Frontend\n(React / Streamlit)", fillcolor="#E3F2FD"];
     upload       [label="Upload API\n(FastAPI)", fillcolor="#E3F2FD"];
@@ -30,7 +31,7 @@ digraph KaryoLink {
     storage      [label="Object Storage (S3)\n(Imagen normalizada)", fillcolor="#FFCCBC"];
     mongo        [label="MongoDB\n(Metadatos del proceso\n(task_id / S3_path / estado))", fillcolor="#FFCCBC"];
 
-    ia           [label="Servicio de IA (GPU)\n(Lee imagen desde S3)", fillcolor="#FFE082"];
+    ia           [label="Servicio de IA (GPU)\n(Usa S3 + metadatos)", fillcolor="#FFE082"];
 
     postprocess  [label="Postprocesamiento\n(Limpieza / validación)", fillcolor="#FFE0B2"];
     report       [label="Generación de informe\n(JSON / PDF)", fillcolor="#E1BEE7"];
@@ -39,25 +40,38 @@ digraph KaryoLink {
     frontend_rep [label="Frontend\n(Vista de informe / descarga PDF)", fillcolor="#D1C4E9"];
 
 
-    // Entrada
-    tecnico    -> frontend   [label=" subir imagen "];
-    frontend   -> upload;
+    // ---------- Frontend (cluster con línea discontinua) ----------
+    subgraph cluster_frontend {
+        label="Zona frontend";
+        style="dashed";
+        color="#90CAF9";
+
+        tecnico  -> frontend   [label=" subir imagen "];
+        frontend -> upload;
+    }
+
+    // ---------- Backend ----------
     upload     -> preprocess;
 
-    preprocess -> storage   [label=" guardar en S3 "];
-    preprocess -> mongo     [label=" crear task\n(S3_path)"];
+    // guardar imagen y metadatos
+    preprocess -> storage   [label=" guardar imagen\nnormalizada en S3 "];
+    preprocess -> mongo     [label=" crear task\ncon S3_path y estado "];
 
-    mongo -> ia [label=" leer S3_path\npara inferencia "];
+    // IA usa ambas fuentes: metadatos + imagen real
+    mongo   -> ia [label=" leer S3_path\n/ metadatos "];
+    storage -> ia [label=" leer imagen\ndesde S3 "];
 
-    // Salida
+    // flujo de salida
     ia          -> postprocess [label=" resultados brutos "];
     postprocess -> report      [label=" resultados limpios "];
     report      -> postgres    [label=" guardar informe "];
-    postgres    -> frontend_rep[label=" mostrar informe\n/ descargar PDF "];
+    postgres    -> frontend_rep[label=" consultar resultados\npara mostrar informe "];
 
-    report      -> mongo       [style=dashed, label=" actualizar task: done "];
+    // actualizar estado del task en Mongo
+    report      -> mongo       [style=dashed, label=" actualizar estado\ndel task (done) "];
 }
 """
+
 
 
 
