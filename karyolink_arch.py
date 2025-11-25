@@ -34,7 +34,7 @@ digraph KaryoLink {
     ia           [label="Servicio de IA (GPU)\n(Usa S3 + metadatos)", fillcolor="#FFE082"];
 
     postprocess  [label="Postprocesamiento\n(Limpieza / validación)", fillcolor="#FFE0B2"];
-    report       [label="Generación de informe\n(JSON / PDF)", fillcolor="#E1BEE7"];
+    report       [label="Generación de informe\n(JSON)", fillcolor="#E1BEE7"];
 
     postgres     [label="PostgreSQL\n(Resultados estructurados)", fillcolor="#C8E6C9"];
     frontend_rep [label="Frontend\n(Vista de informe / descarga PDF)", fillcolor="#D1C4E9"];
