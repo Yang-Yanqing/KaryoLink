@@ -21,56 +21,44 @@ digraph KaryoLink {
     fontsize=10;
     node [shape=rect, style="rounded,filled", fontname="Helvetica"];
 
-    // Nodos principales
     tecnico      [label="Técnico\n(Usuario)", fillcolor="#BBDEFB"];
     frontend     [label="Frontend\n(React / Streamlit)", fillcolor="#E3F2FD"];
     upload       [label="Upload API\n(FastAPI)", fillcolor="#E3F2FD"];
+
     preprocess   [label="Preprocesamiento\n(Normalización / limpieza)", fillcolor="#FFF9C4"];
 
-    // Almacenamiento de imagen / metadatos
-    storage      [label="Object Storage\n(Imagen normalizada) (?)", fillcolor="#FFCCBC"];
-    mongo        [label="MongoDB\n(Metadatos / rutas / autor)", fillcolor="#FFCCBC"];
+    storage      [label="Object Storage (S3)\n(Imagen normalizada)", fillcolor="#FFCCBC"];
+    mongo        [label="MongoDB\n(Metadatos del proceso\n(task_id / S3_path / estado))", fillcolor="#FFCCBC"];
 
-    // IA y salida
-    ia           [label="Servicio de IA\n(Inferencia desde MongoDB)", fillcolor="#FFE082"];
-    postprocess  [label="Postprocesamiento\n(Limpieza / validación / etiquetas)", fillcolor="#FFE0B2"];
-    report       [label="Generación de informe\n(Estructura JSON / PDF)", fillcolor="#E1BEE7"];
+    ia           [label="Servicio de IA (GPU)\n(Lee imagen desde S3)", fillcolor="#FFE082"];
+
+    postprocess  [label="Postprocesamiento\n(Limpieza / validación)", fillcolor="#FFE0B2"];
+    report       [label="Generación de informe\n(JSON / PDF)", fillcolor="#E1BEE7"];
+
     postgres     [label="PostgreSQL\n(Resultados estructurados)", fillcolor="#C8E6C9"];
     frontend_rep [label="Frontend\n(Vista de informe / descarga PDF)", fillcolor="#D1C4E9"];
 
-    // --------- Flujo de entrada ---------
-    subgraph cluster_input {
-        label="Flujo de entrada: imagen del cariotipo";
-        style="dashed";
-        color="#90CAF9";
 
-        tecnico    -> frontend   [label=" subir imagen "];
-        frontend   -> upload;
-        upload     -> preprocess;
+    // Entrada
+    tecnico    -> frontend   [label=" subir imagen "];
+    frontend   -> upload;
+    upload     -> preprocess;
 
-        // Desde preprocesamiento: guardar imagen normalizada (opcional) y metadatos
-        preprocess -> storage    [label=" guardar imagen\nnormalizada (?) "];
-        preprocess -> mongo      [label=" ruta / metadatos "];
+    preprocess -> storage   [label=" guardar en S3 "];
+    preprocess -> mongo     [label=" crear task\n(S3_path)"];
 
-        // IA consume los datos desde MongoDB / ruta
-        mongo      -> ia         [label=" leer datos\npara inferencia "];
-    }
+    mongo -> ia [label=" leer S3_path\npara inferencia "];
 
-    // --------- Flujo de salida ---------
-    subgraph cluster_output {
-        label="Flujo de salida: informe generado";
-        style="dashed";
-        color="#CE93D8";
+    // Salida
+    ia          -> postprocess [label=" resultados brutos "];
+    postprocess -> report      [label=" resultados limpios "];
+    report      -> postgres    [label=" guardar informe "];
+    postgres    -> frontend_rep[label=" mostrar informe\n/ descargar PDF "];
 
-        ia          -> postprocess [label=" resultados brutos "];
-        postprocess -> report      [label=" resultados limpios "];
-        report      -> postgres    [label=" guardar resultados "];
-    }
-
-    // --------- Resultados -> vista en frontend ---------
-    postgres -> frontend_rep [label=" consultar resultados\npara mostrar informe "];
+    report      -> mongo       [style=dashed, label=" actualizar task: done "];
 }
 """
+
 
 
 
