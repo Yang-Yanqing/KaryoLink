@@ -1,33 +1,17 @@
 import streamlit as st
 
-st.set_page_config(page_title="KaryoLink – Arquitectura (versión mejorada)", layout="centered")
+st.set_page_config(page_title="KaryoLink – Arquitectura", layout="centered")
 
-st.title("Arquitectura mejorada – Plataforma KaryoLink")
+st.title("Arquitectura propuesta para la plataforma KaryoLink")
 
 st.markdown(
     """
-La arquitectura se amplía con **siete mejoras clave** para preparar la plataforma hacia un entorno profesional y seguro:
+La idea es ver la plataforma como **dos flujos principales**:
 
-1. **Almacenamiento centralizado en Object Storage (S3 / GCS / MinIO)**  
-   Las imágenes normalizadas se guardan fuera de la base de datos, y solo se almacenan rutas y metadatos.
+- **Flujo de entrada:** la imagen del cariotipo entra en el sistema, se prepara y se analiza con IA.  
+- **Flujo de salida:** los resultados de la IA se limpian, se validan y se convierten en un informe estructurado (JSON / PDF).
 
-2. **Servicio de tareas asíncronas (Celery / RQ / RabbitMQ)**  
-   Permite procesar análisis de IA en segundo plano y notificar progreso al usuario.
-
-3. **Capa de seguridad y cumplimiento (Data Gateway)**  
-   Valida el archivo, verifica autenticación y elimina información sensible antes de guardarlo.
-
-4. **Sistema de auditoría y trazabilidad**  
-   Cada paso (subida, inferencia, informe) se registra con usuario, tiempo y estado.
-
-5. **Capa de caché (Redis)**  
-   Guarda estados intermedios y acelera la recuperación de resultados o progreso de tareas.
-
-6. **Consistencia de datos mediante un ID único (`job_id`)**  
-   Todas las entidades (imagen, inferencia, informe) se vinculan por el mismo identificador.
-
-7. **Generación de informes en dos fases**  
-   Primero JSON estructurado (para análisis/estadísticas) y luego PDF bajo demanda.
+El diagrama de abajo es solo un esquema conceptual para discutir juntos la arquitectura.
 """
 )
 
@@ -37,23 +21,21 @@ digraph KaryoLink {
     fontsize=10;
     node [shape=rect, style="rounded,filled", fontname="Helvetica"];
 
-    // --------- Nodos principales ---------
+    // Nodos principales
     tecnico      [label="Técnico\n(Usuario)", fillcolor="#BBDEFB"];
-    auth         [label="Autenticación / Control de acceso\n(SSO / Token)", fillcolor="#C5CAE9"];
     frontend     [label="Frontend\n(React / Streamlit)", fillcolor="#E3F2FD"];
-    datagw       [label="Data Gateway\n(Validación / Cumplimiento / Desidentificación)", fillcolor="#B3E5FC"];
     upload       [label="Upload API\n(FastAPI)", fillcolor="#E3F2FD"];
-    queue        [label="Cola de tareas asíncronas\n(Celery / RQ / RabbitMQ)", fillcolor="#FFECB3"];
     preprocess   [label="Preprocesamiento\n(Normalización / limpieza)", fillcolor="#FFF9C4"];
-    storage      [label="Object Storage\n(Imagen normalizada)", fillcolor="#FFCCBC"];
-    mongo        [label="MongoDB\n(Metadatos / rutas / autor / job_id)", fillcolor="#FFCCBC"];
-    redis        [label="Redis\n(Cache / Estado de tareas)", fillcolor="#C8E6C9"];
-    ia           [label="Servicio de IA\n(Inferencia con imágenes normalizadas)", fillcolor="#FFE082"];
+
+    // Almacenamiento de imagen / metadatos
+    storage      [label="Object Storage\n(Imagen normalizada) (?)", fillcolor="#FFCCBC"];
+    mongo        [label="MongoDB\n(Metadatos / rutas / autor)", fillcolor="#FFCCBC"];
+
+    // IA y salida
+    ia           [label="Servicio de IA\n(Inferencia desde MongoDB)", fillcolor="#FFE082"];
     postprocess  [label="Postprocesamiento\n(Limpieza / validación / etiquetas)", fillcolor="#FFE0B2"];
-    report_json  [label="Generación de informe JSON\n(Estructura estructurada)", fillcolor="#E1BEE7"];
-    report_pdf   [label="Conversión a PDF\n(Plantilla institucional)", fillcolor="#CE93D8"];
-    postgres     [label="PostgreSQL\n(Resultados estructurados / auditoría)", fillcolor="#C8E6C9"];
-    audit        [label="Registro de auditoría\n(Eventos / tiempos / usuario)", fillcolor="#FFCDD2"];
+    report       [label="Generación de informe\n(Estructura JSON / PDF)", fillcolor="#E1BEE7"];
+    postgres     [label="PostgreSQL\n(Resultados estructurados)", fillcolor="#C8E6C9"];
     frontend_rep [label="Frontend\n(Vista de informe / descarga PDF)", fillcolor="#D1C4E9"];
 
     // --------- Flujo de entrada ---------
@@ -62,11 +44,16 @@ digraph KaryoLink {
         style="dashed";
         color="#90CAF9";
 
-        tecnico -> auth -> frontend -> datagw -> upload -> queue -> preprocess;
-        preprocess -> storage    [label=" guardar imagen normalizada "];
-        preprocess -> mongo      [label=" guardar metadatos / ruta / job_id "];
-        preprocess -> redis      [label=" estado temporal "];
-        queue -> ia              [label=" leer desde Object Storage y MongoDB "];
+        tecnico    -> frontend   [label=" subir imagen "];
+        frontend   -> upload;
+        upload     -> preprocess;
+
+        // Desde preprocesamiento: guardar imagen normalizada (opcional) y metadatos
+        preprocess -> storage    [label=" guardar imagen\nnormalizada (?) "];
+        preprocess -> mongo      [label=" ruta / metadatos "];
+
+        // IA consume los datos desde MongoDB / ruta
+        mongo      -> ia         [label=" leer datos\npara inferencia "];
     }
 
     // --------- Flujo de salida ---------
@@ -75,25 +62,22 @@ digraph KaryoLink {
         style="dashed";
         color="#CE93D8";
 
-        ia -> postprocess [label=" resultados brutos "];
-        postprocess -> report_json [label=" resultados limpios "];
-        report_json -> report_pdf  [label=" conversión a PDF bajo demanda "];
-        report_json -> postgres    [label=" guardar resultados estructurados "];
-        report_pdf -> postgres     [label=" guardar metadatos de archivo "];
+        ia          -> postprocess [label=" resultados brutos "];
+        postprocess -> report      [label=" resultados limpios "];
+        report      -> postgres    [label=" guardar resultados "];
     }
 
-    // --------- Auditoría y visualización ---------
-    postgres -> frontend_rep [label=" consultar resultados / descarga PDF "];
-    datagw -> audit          [label=" registrar acceso / subida "];
-    ia -> audit              [label=" registrar inferencia "];
-    report_pdf -> audit      [label=" registrar generación de informe "];
+    // --------- Resultados -> vista en frontend ---------
+    postgres -> frontend_rep [label=" consultar resultados\npara mostrar informe "];
 }
 """
 
-st.subheader("Diagrama de alto nivel con mejoras (seguridad, asíncrono, auditoría)")
+
+
+st.subheader("Diagrama de alto nivel (dos flujos: entrada y salida)")
 st.graphviz_chart(dot)
 
 st.caption(
-    "Versión ampliada del esquema conceptual incorporando las 7 mejoras: seguridad, tareas asíncronas, almacenamiento externo, "
-    "auditoría, caché, consistencia de datos y generación estructurada de informes."
+    "Esquema conceptual para discutir la arquitectura: flujo de entrada (imagen) "
+    "y flujo de salida (informe de IA). Los detalles se pueden ajustar según el modelo y los requisitos médicos."
 )
